@@ -8,6 +8,7 @@ interface NavPrice {
   chg: string
   chg_pct: string
   date: string
+  created_at?: string
 }
 
 interface WatchlistProps {
