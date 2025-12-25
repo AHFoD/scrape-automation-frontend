@@ -42,6 +42,8 @@ export default function Home() {
   const [lastScrape, setLastScrape] = useState<ScrapeRun | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [selectedDate, setSelectedDate] = useState<string>('')
+  const [availableDates, setAvailableDates] = useState<string[]>([])
 
   useEffect(() => {
     fetchData()
@@ -49,7 +51,8 @@ export default function Home() {
     const navSubscription = supabase
       .channel('public:nav_prices')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'nav_prices' }, () => {
-        fetchNavData()
+        fetchAvailableDates()
+        if (!selectedDate) fetchNavData()
       })
       .subscribe()
 
@@ -58,19 +61,36 @@ export default function Home() {
     }
   }, [])
 
+  useEffect(() => {
+    if (selectedDate) {
+      fetchNavDataForDate(selectedDate)
+    }
+  }, [selectedDate])
+
   const fetchData = async () => {
     try {
       setLoading(true)
       setError(null)
-      
-      // Optionally trigger a new scrape (commented out for now)
-      // await triggerScrape()
-      
-      await Promise.all([fetchNavData(), fetchChanges(), fetchLastScrape()])
+      await Promise.all([fetchAvailableDates(), fetchNavData(), fetchChanges(), fetchLastScrape()])
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to fetch data')
     } finally {
       setLoading(false)
+    }
+  }
+
+  const fetchAvailableDates = async () => {
+    const { data, error } = await supabase
+      .from('nav_prices')
+      .select('date')
+      .order('date', { ascending: false })
+      .limit(100)
+
+    if (error) throw error
+    const uniqueDates = Array.from(new Set(data?.map(d => d.date) || []))
+    setAvailableDates(uniqueDates)
+    if (uniqueDates.length > 0 && !selectedDate) {
+      setSelectedDate(uniqueDates[0])
     }
   }
 
@@ -86,19 +106,30 @@ export default function Home() {
   }
 
   const fetchNavData = async () => {
+    // Get latest date
+    const { data: dateData, error: dateError } = await supabase
+      .from('nav_prices')
+      .select('date')
+      .order('date', { ascending: false })
+      .limit(1)
+
+    if (dateError) throw dateError
+    
+    if (dateData && dateData.length > 0) {
+      const latestDate = dateData[0].date
+      await fetchNavDataForDate(latestDate)
+    }
+  }
+
+  const fetchNavDataForDate = async (date: string) => {
     const { data, error } = await supabase
       .from('nav_prices')
       .select('*')
-      .order('date', { ascending: false })
-      .limit(500)
+      .eq('date', date)
+      .order('fund_name', { ascending: true })
 
     if (error) throw error
-    // Get latest date and filter for that date only
-    if (data && data.length > 0) {
-      const latestDate = data[0].date
-      const latestData = data.filter(d => d.date === latestDate)
-      setNavData(latestData.sort((a, b) => a.fund_name.localeCompare(b.fund_name)))
-    }
+    setNavData(data || [])
   }
 
   const fetchChanges = async () => {
@@ -154,6 +185,27 @@ export default function Home() {
               {loading ? 'Loading...' : 'Refresh'}
             </button>
           </div>
+          
+          {/* Date Picker */}
+          <div className="mt-4 flex items-center gap-4">
+            <label className="text-sm font-medium text-gray-700">View data for:</label>
+            <select
+              value={selectedDate}
+              onChange={(e) => setSelectedDate(e.target.value)}
+              className="px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+            >
+              {availableDates.map((date) => (
+                <option key={date} value={date}>
+                  {new Date(date).toLocaleDateString('en-US', {
+                    year: 'numeric',
+                    month: 'long',
+                    day: 'numeric',
+                  })}
+                </option>
+              ))}
+            </select>
+          </div>
+          
           {lastScrape && (
             <p className="text-sm text-gray-500 mt-3">
               Last updated: {new Date(lastScrape.timestamp).toLocaleString()}
