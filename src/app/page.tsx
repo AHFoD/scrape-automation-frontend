@@ -2,9 +2,14 @@
 
 import { useEffect, useState } from 'react'
 import { supabase } from '@/lib/supabase'
+import { useWatchlist } from '@/hooks/useWatchlist'
 import NavTable from '@/components/NavTable'
 import NavChanges from '@/components/NavChanges'
 import Analytics from '@/components/Analytics'
+import NavChart from '@/components/NavChart'
+import TopPerformers from '@/components/TopPerformers'
+import FundDetailsModal from '@/components/FundDetailsModal'
+import Watchlist from '@/components/Watchlist'
 
 interface NavPrice {
   id: number
@@ -44,6 +49,10 @@ export default function Home() {
   const [error, setError] = useState<string | null>(null)
   const [selectedDate, setSelectedDate] = useState<string>('')
   const [availableDates, setAvailableDates] = useState<string[]>([])
+  const [selectedFund, setSelectedFund] = useState<NavPrice | null>(null)
+  const [showFundModal, setShowFundModal] = useState(false)
+  const [showWatchlist, setShowWatchlist] = useState(false)
+  const { watchlist, toggleWatchlist, isFavorite, clearWatchlist, isLoaded } = useWatchlist()
 
   useEffect(() => {
     fetchData()
@@ -212,6 +221,16 @@ export default function Home() {
               {lastScrape.status === 'success' && ' ✅'}
             </p>
           )}
+          
+          {/* Watchlist Button */}
+          <div className="mt-4">
+            <button
+              onClick={() => setShowWatchlist(!showWatchlist)}
+              className="text-sm bg-yellow-100 hover:bg-yellow-200 text-yellow-800 px-3 py-1 rounded transition"
+            >
+              ⭐ My Watchlist ({watchlist.length})
+            </button>
+          </div>
         </div>
       </header>
 
@@ -220,19 +239,49 @@ export default function Home() {
         {/* Analytics Cards */}
         <Analytics navData={navData} />
 
-        {/* Two Column Layout */}
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 mt-8">
-          {/* NAV Prices Table */}
-          <div className="lg:col-span-2">
-            <NavTable data={navData} loading={loading} />
+        {/* Show Watchlist or Dashboard */}
+        {showWatchlist ? (
+          <div className="mt-8">
+            <Watchlist 
+              data={navData} 
+              watchlist={watchlist} 
+              onClearWatchlist={clearWatchlist}
+              onFundClick={(fund) => {
+                setSelectedFund(fund)
+                setShowFundModal(true)
+              }}
+            />
           </div>
+        ) : (
+          <>
+            {/* Charts and Top Performers */}
+            <div className="mt-8 space-y-8">
+              <NavChart data={navData} />
+              <TopPerformers data={changes} loading={loading} />
+            </div>
 
-          {/* NAV Changes */}
-          <div>
-            <NavChanges data={changes} loading={loading} />
-          </div>
-        </div>
+            {/* Two Column Layout */}
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 mt-8">
+              {/* NAV Prices Table */}
+              <div className="lg:col-span-2">
+                <NavTable data={navData} loading={loading} />
+              </div>
+
+              {/* NAV Changes */}
+              <div>
+                <NavChanges data={changes} loading={loading} />
+              </div>
+            </div>
+          </>
+        )}
       </main>
+
+      {/* Fund Details Modal */}
+      <FundDetailsModal 
+        fund={selectedFund} 
+        isOpen={showFundModal} 
+        onClose={() => setShowFundModal(false)}
+      />
     </div>
   )
 }
