@@ -1,27 +1,78 @@
 'use client'
 
+import { useMemo } from 'react'
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts'
 
-interface ChartData {
+interface NavHistoryRow {
   date: string
-  [key: string]: string | number
+  fund_abbr: string
+  nav: number
+}
+
+interface ChartPoint {
+  date: string
+  [fundAbbr: string]: number | string
 }
 
 interface NavChartProps {
-  data: ChartData[]
-  selectedFunds?: string[]
+  data: NavHistoryRow[]
+  selectedDate?: string
 }
 
-export default function NavChart({ data, selectedFunds = [] }: NavChartProps) {
+export default function NavChart({ data, selectedDate }: NavChartProps) {
+  const { chartData, uniqueDates, fundKeys } = useMemo(() => {
+    if (!data || data.length === 0) {
+      return { chartData: [], uniqueDates: new Set(), fundKeys: [] }
+    }
+
+    const byDate = new Map<string, ChartPoint>()
+
+    data.forEach(row => {
+      if (!byDate.has(row.date)) {
+        byDate.set(row.date, { date: row.date })
+      }
+      byDate.get(row.date)![row.fund_abbr] = row.nav
+    })
+
+    const sorted = Array.from(byDate.values()).sort((a, b) =>
+      (a.date as string).localeCompare(b.date as string)
+    )
+
+    const uniqueDates = new Set(data.map(row => row.date))
+    const allFunds = Array.from(new Set(data.map(row => row.fund_abbr)))
+    const fundKeys = allFunds.slice(0, 6)
+
+    return { chartData: sorted, uniqueDates, fundKeys }
+  }, [data])
+
   if (!data || data.length === 0) {
     return (
       <div className="bg-white rounded-lg shadow p-6">
-        <p className="text-gray-500 text-center">No data available for chart</p>
+        <h2 className="text-2xl font-bold text-gray-900 mb-6">📈 NAV Trends</h2>
+        <div className="w-full h-96 flex items-center justify-center bg-gray-50 rounded border border-gray-200">
+          <div className="text-center">
+            <p className="text-gray-600 text-lg mb-2">No historical data available yet</p>
+            <p className="text-gray-500 text-sm">Check back later or select a different date</p>
+          </div>
+        </div>
       </div>
     )
   }
 
-  // Colors for different funds
+  if (chartData.length === 0 || uniqueDates.size < 2) {
+    return (
+      <div className="bg-white rounded-lg shadow p-6">
+        <h2 className="text-2xl font-bold text-gray-900 mb-6">📈 NAV Trends</h2>
+        <div className="w-full h-96 flex items-center justify-center bg-gray-50 rounded border border-gray-200">
+          <div className="text-center">
+            <p className="text-gray-600 text-lg mb-2">Not enough data to display trends</p>
+            <p className="text-gray-500 text-sm">Trends require at least 2 dates with data</p>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
   const colors = ['#3b82f6', '#ef4444', '#10b981', '#f59e0b', '#8b5cf6', '#ec4899']
 
   return (
@@ -30,7 +81,7 @@ export default function NavChart({ data, selectedFunds = [] }: NavChartProps) {
       
       <div className="w-full h-96">
         <ResponsiveContainer width="100%" height="100%">
-          <LineChart data={data} margin={{ top: 5, right: 30, left: 0, bottom: 5 }}>
+          <LineChart data={chartData} margin={{ top: 5, right: 30, left: 0, bottom: 5 }}>
             <CartesianGrid strokeDasharray="3 3" />
             <XAxis 
               dataKey="date" 
@@ -50,27 +101,23 @@ export default function NavChart({ data, selectedFunds = [] }: NavChartProps) {
             />
             <Legend />
             
-            {/* Display all funds in data or only selected ones */}
-            {Object.keys(data[0])
-              .filter(key => key !== 'date')
-              .slice(0, 6) // Limit to 6 funds to avoid clutter
-              .map((fund, index) => (
-                <Line
-                  key={fund}
-                  type="monotone"
-                  dataKey={fund}
-                  stroke={colors[index % colors.length]}
-                  dot={false}
-                  strokeWidth={2}
-                  isAnimationActive={false}
-                />
-              ))}
+            {fundKeys.map((fund, index) => (
+              <Line
+                key={fund}
+                type="monotone"
+                dataKey={fund}
+                stroke={colors[index % colors.length]}
+                dot={false}
+                strokeWidth={2}
+                isAnimationActive={false}
+              />
+            ))}
           </LineChart>
         </ResponsiveContainer>
       </div>
       
       <p className="text-sm text-gray-600 mt-4">
-        💡 Tip: View different dates using the date picker to see historical trends
+        💡 Showing trends for {fundKeys.length} of {Array.from(new Set(data.map(d => d.fund_abbr))).length} funds across {uniqueDates.size} date(s)
       </p>
     </div>
   )

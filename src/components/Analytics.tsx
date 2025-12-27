@@ -1,10 +1,17 @@
 'use client'
 
+const EXPECTED_TOTAL_FUNDS = 182
+
 interface NavPrice {
   nav: number
 }
 
-export default function Analytics({ navData }: { navData: NavPrice[] }) {
+interface AnalyticsProps {
+  navData: NavPrice[]
+  selectedDate?: string
+}
+
+export default function Analytics({ navData, selectedDate }: AnalyticsProps) {
   if (navData.length === 0) {
     return (
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
@@ -23,12 +30,28 @@ export default function Analytics({ navData }: { navData: NavPrice[] }) {
   const avgNav = navData.reduce((sum, d) => sum + d.nav, 0) / navData.length
   const maxNav = Math.max(...navData.map(d => d.nav))
   const minNav = Math.min(...navData.map(d => d.nav))
+  const coverage = (navData.length / EXPECTED_TOTAL_FUNDS) * 100
+  const isCoverageLow = coverage < 80
+  const formattedDate = selectedDate
+    ? new Date(selectedDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+    : 'Today'
 
   return (
-    <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+    <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
       <div className="bg-white rounded-lg shadow p-6">
-        <p className="text-gray-600 text-sm font-medium">Total Funds</p>
+        <p className="text-gray-600 text-sm font-medium">Total Funds ({formattedDate})</p>
         <p className="text-3xl font-bold text-gray-900 mt-2">{navData.length}</p>
+      </div>
+
+      <div className={`bg-white rounded-lg shadow p-6 ${ isCoverageLow ? 'border-l-4 border-yellow-500' : ''}`}>
+        <p className="text-gray-600 text-sm font-medium flex items-center gap-1">
+          Coverage
+          {isCoverageLow && <span className="text-yellow-600 text-xs">⚠️</span>}
+        </p>
+        <p className={`text-3xl font-bold mt-2 ${ isCoverageLow ? 'text-yellow-600' : 'text-green-600'}`}>
+          {coverage.toFixed(0)}%
+        </p>
+        <p className="text-xs text-gray-500 mt-1">{navData.length} of {EXPECTED_TOTAL_FUNDS}</p>
       </div>
 
       <div className="bg-white rounded-lg shadow p-6">

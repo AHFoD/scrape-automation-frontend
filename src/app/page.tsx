@@ -19,7 +19,7 @@ interface NavPrice {
   chg: string
   chg_pct: string
   date: string
-  created_at: string
+  created_at?: string
 }
 
 interface NavChange {
@@ -41,9 +41,16 @@ interface ScrapeRun {
   error_message: string | null
 }
 
+interface NavHistoryRow {
+  date: string
+  fund_abbr: string
+  nav: number
+}
+
 export default function Home() {
   const [navData, setNavData] = useState<NavPrice[]>([])
   const [changes, setChanges] = useState<NavChange[]>([])
+  const [navHistory, setNavHistory] = useState<NavHistoryRow[]>([])
   const [lastScrape, setLastScrape] = useState<ScrapeRun | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -80,7 +87,7 @@ export default function Home() {
     try {
       setLoading(true)
       setError(null)
-      await Promise.all([fetchAvailableDates(), fetchNavData(), fetchChanges(), fetchLastScrape()])
+      await Promise.all([fetchAvailableDates(), fetchNavData(), fetchChanges(), fetchLastScrape(), fetchNavHistory()])
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to fetch data')
     } finally {
@@ -139,6 +146,17 @@ export default function Home() {
 
     if (error) throw error
     setNavData(data || [])
+  }
+
+  const fetchNavHistory = async () => {
+    const { data, error } = await supabase
+      .from('nav_prices')
+      .select('date, fund_abbr, nav')
+      .order('date', { ascending: true })
+      .limit(3000) // ~100 funds * 30 days
+
+    if (error) throw error
+    setNavHistory((data as NavHistoryRow[]) || [])
   }
 
   const fetchChanges = async () => {
@@ -237,7 +255,7 @@ export default function Home() {
       {/* Main Content */}
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         {/* Analytics Cards */}
-        <Analytics navData={navData} />
+        <Analytics navData={navData} selectedDate={selectedDate} />
 
         {/* Show Watchlist or Dashboard */}
         {showWatchlist ? (
@@ -256,7 +274,7 @@ export default function Home() {
           <>
             {/* Charts and Top Performers */}
             <div className="mt-8 space-y-8">
-              <NavChart data={navData} />
+              <NavChart data={navHistory} selectedDate={selectedDate} />
               <TopPerformers data={changes} loading={loading} />
             </div>
 
